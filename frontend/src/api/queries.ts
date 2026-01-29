@@ -33,14 +33,14 @@ export async function getQueryPlan(planId: string): Promise<QueryPlanResponse> {
 }
 
 /**
- * List query plans with pagination
+ * List query plans with pagination and optional title search
  */
 export async function listQueryPlans(
-  params: { limit?: number; offset?: number } = {}
+  params: { limit?: number; offset?: number; title_search?: string } = {}
 ): Promise<QueryPlanListResponse> {
-  const { limit = 100, offset = 0 } = params;
+  const { limit = 100, offset = 0, title_search } = params;
   const response = await apiClient.get<QueryPlanListResponse>(ENDPOINTS.LIST_PLANS, {
-    params: { limit, offset },
+    params: { limit, offset, ...(title_search && { title_search }) },
   });
   return response.data;
 }

@@ -6,7 +6,7 @@ import type { AnalyzeQueryRequest, ApiError } from '@/types';
 export const queryKeys = {
   all: ['queryPlans'] as const,
   lists: () => [...queryKeys.all, 'list'] as const,
-  list: (params: { limit?: number; offset?: number }) => [...queryKeys.lists(), params] as const,
+  list: (params: { limit?: number; offset?: number; title_search?: string }) => [...queryKeys.lists(), params] as const,
   details: () => [...queryKeys.all, 'detail'] as const,
   detail: (id: string) => [...queryKeys.details(), id] as const,
   health: ['health'] as const,
@@ -42,7 +42,7 @@ export function useQueryPlan(planId: string, enabled = true) {
 /**
  * Hook to list query plans
  */
-export function useQueryPlanList(params: { limit?: number; offset?: number } = {}) {
+export function useQueryPlanList(params: { limit?: number; offset?: number; title_search?: string } = {}) {
   return useQuery<Awaited<ReturnType<typeof listQueryPlans>>, ApiError>({
     queryKey: queryKeys.list(params),
     queryFn: () => listQueryPlans(params),

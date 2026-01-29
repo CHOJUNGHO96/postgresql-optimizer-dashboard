@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Play, Trash2, Info } from 'lucide-react';
+import { Play, Trash2, Info, FileText } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Button, Card, CardHeader, CardTitle, CardContent } from '@/components/common';
 import { SqlEditor } from './SqlEditor';
@@ -12,6 +12,7 @@ interface QueryAnalyzerProps {
 
 export function QueryAnalyzer({ onAnalysisComplete }: QueryAnalyzerProps) {
   const [query, setQuery] = useState('');
+  const [title, setTitle] = useState('');
   const { mutate: analyze, isPending } = useAnalyzeQuery();
 
   const handleAnalyze = useCallback(() => {
@@ -21,8 +22,9 @@ export function QueryAnalyzer({ onAnalysisComplete }: QueryAnalyzerProps) {
       return;
     }
 
+    const trimmedTitle = title.trim();
     analyze(
-      { query: trimmedQuery },
+      { query: trimmedQuery, ...(trimmedTitle && { title: trimmedTitle }) },
       {
         onSuccess: (result) => {
           toast.success('쿼리 분석이 완료되었습니다.');
@@ -33,10 +35,11 @@ export function QueryAnalyzer({ onAnalysisComplete }: QueryAnalyzerProps) {
         },
       }
     );
-  }, [query, analyze, onAnalysisComplete]);
+  }, [query, title, analyze, onAnalysisComplete]);
 
   const handleClear = useCallback(() => {
     setQuery('');
+    setTitle('');
   }, []);
 
   const handleKeyDown = useCallback(
@@ -82,6 +85,21 @@ export function QueryAnalyzer({ onAnalysisComplete }: QueryAnalyzerProps) {
           <span>
             <strong>SELECT</strong> 쿼리만 분석 가능합니다. INSERT, UPDATE, DELETE 등 데이터 변경 쿼리는 지원되지 않습니다.
           </span>
+        </div>
+        <div className="mb-3">
+          <label htmlFor="query-title" className="mb-1 flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-gray-300">
+            <FileText className="h-4 w-4" />
+            제목 (선택사항)
+          </label>
+          <input
+            id="query-title"
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="쿼리를 구분할 수 있는 제목을 입력하세요"
+            maxLength={255}
+            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder-gray-500 dark:focus:border-blue-400 dark:focus:ring-blue-400"
+          />
         </div>
         <SqlEditor
           value={query}

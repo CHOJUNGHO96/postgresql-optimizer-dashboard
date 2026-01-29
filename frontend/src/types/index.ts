@@ -10,6 +10,7 @@ export interface CostEstimate {
 export interface QueryPlanResponse {
   id: string;
   query: string;
+  title: string | null;
   node_type: PlanNodeType;
   cost_estimate: CostEstimate;
   execution_time_ms: number | null;
@@ -24,6 +25,7 @@ export interface QueryPlanListResponse {
 
 export interface AnalyzeQueryRequest {
   query: string;
+  title?: string;
 }
 
 export interface HealthResponse {

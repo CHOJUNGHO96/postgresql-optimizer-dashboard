@@ -78,6 +78,9 @@ export function HistoryTable({
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50">
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                제목
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
                 쿼리
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
@@ -105,6 +108,11 @@ export function HistoryTable({
                   key={item.id}
                   className="bg-white transition-colors hover:bg-gray-50 dark:bg-gray-800 dark:hover:bg-gray-750"
                 >
+                  <td className="px-4 py-4">
+                    <span className="block max-w-[150px] truncate text-sm font-medium text-gray-900 dark:text-white">
+                      {item.title || <span className="text-gray-400 dark:text-gray-500">-</span>}
+                    </span>
+                  </td>
                   <td className="px-4 py-4">
                     <code className="block max-w-xs truncate font-mono text-sm text-gray-700 dark:text-gray-300">
                       {truncate(item.query, 50)}
