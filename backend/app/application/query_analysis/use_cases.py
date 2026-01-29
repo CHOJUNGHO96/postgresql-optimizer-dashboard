@@ -37,11 +37,6 @@ class AnalyzeQueryUseCase:
         """
         logger.info("쿼리 분석 시작: %s", input_dto.query[:100])
 
-        # 기본 검증: SELECT 쿼리만 허용
-        query_stripped = input_dto.query.strip().upper()
-        if not query_stripped.startswith("SELECT"):
-            raise InvalidQueryError("SELECT 쿼리만 분석할 수 있습니다.")
-
         try:
             # 대상 DB에서 EXPLAIN 실행
             plan_raw = await self._repository.analyze_query(input_dto.query)
