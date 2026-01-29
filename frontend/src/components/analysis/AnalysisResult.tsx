@@ -93,7 +93,7 @@ export function AnalysisResult({
               onChange={() => {}}
               readOnly
               minHeight="100px"
-              maxHeight="200px"
+              maxHeight="400px"
             />
           </CardContent>
         </Card>

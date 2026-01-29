@@ -67,7 +67,7 @@ export function SqlEditor({
           maxHeight,
           fontSize: '14px',
         }}
-        className="[&_.cm-editor]:!outline-none [&_.cm-gutters]:!border-r-0"
+        className="[&_.cm-editor]:!outline-none [&_.cm-gutters]:!border-r-0 [&_.cm-scroller]:!overflow-auto"
       />
     </div>
   );
