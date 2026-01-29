@@ -1,8 +1,12 @@
+import { useMemo } from 'react';
 import { Clock, Calendar, FileCode2 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, JsonTreeView, Badge } from '@/components/common';
 import { CostCard } from './CostCard';
 import { NodeTypeCard } from './NodeTypeBadge';
+import { BottleneckSummary } from './BottleneckSummary';
+import { OptimizationSuggestions } from './OptimizationSuggestions';
 import { SqlEditor } from '@/components/query';
+import { analyzePlan } from '@/lib/planAnalysis';
 import {
   formatExecutionTime,
   formatDate,
@@ -25,6 +29,11 @@ export function AnalysisResult({
 }: AnalysisResultProps) {
   const severity = getCostSeverity(result.cost_estimate.total_cost);
   const severityStyles = getCostSeverityStyles(severity);
+
+  // 실행 계획 분석
+  const planAnalysis = useMemo(() => {
+    return analyzePlan(result.plan_raw);
+  }, [result.plan_raw]);
 
   return (
     <div className={cn('space-y-6 animate-fade-in', className)}>
@@ -75,6 +84,19 @@ export function AnalysisResult({
         </div>
       </Card>
 
+      {/* Bottleneck Summary - NEW */}
+      {planAnalysis && (
+        <BottleneckSummary
+          bottlenecks={planAnalysis.bottlenecks}
+          totalCost={planAnalysis.totalCost}
+        />
+      )}
+
+      {/* Optimization Suggestions - NEW */}
+      {planAnalysis && (
+        <OptimizationSuggestions suggestions={planAnalysis.suggestions} />
+      )}
+
       {/* Node Type */}
       <NodeTypeCard nodeType={result.node_type} />
 
@@ -99,10 +121,10 @@ export function AnalysisResult({
         </Card>
       )}
 
-      {/* Raw Plan */}
+      {/* Raw JSON */}
       <Card padding="lg">
         <CardHeader>
-          <CardTitle>실행 계획 상세 (JSON)</CardTitle>
+          <CardTitle>원본 JSON</CardTitle>
         </CardHeader>
         <CardContent>
           <JsonTreeView
