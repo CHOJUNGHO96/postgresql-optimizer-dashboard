@@ -14,6 +14,7 @@ class AnalyzeQueryRequest(BaseModel):
     """쿼리 분석 요청 스키마."""
 
     query: str = Field(min_length=1, description="분석할 SQL 쿼리", examples=["SELECT * FROM users WHERE id = 1"])
+    title: str | None = Field(default=None, max_length=255, description="쿼리 제목", examples=["사용자 조회"])
 
 
 class CostEstimateResponse(BaseModel):
@@ -30,6 +31,7 @@ class QueryPlanResponse(BaseModel):
 
     id: UUID
     query: str
+    title: str | None
     node_type: str
     cost_estimate: CostEstimateResponse
     execution_time_ms: float | None

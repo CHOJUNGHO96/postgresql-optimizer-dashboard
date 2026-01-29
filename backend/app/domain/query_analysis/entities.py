@@ -24,6 +24,7 @@ class QueryPlan(BaseModel):
 
     id: UUID = Field(default_factory=uuid4, description="고유 식별자")
     query: str = Field(description="분석 대상 SQL 쿼리")
+    title: str | None = Field(default=None, description="쿼리 제목")
     plan_raw: dict[str, Any] = Field(description="EXPLAIN JSON 원본 결과")
     node_type: PlanNodeType = Field(description="최상위 노드 유형")
     cost_estimate: CostEstimate = Field(description="비용 추정치")

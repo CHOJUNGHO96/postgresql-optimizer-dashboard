@@ -38,12 +38,15 @@ class AbstractQueryAnalysisRepository(ABC):
         ...
 
     @abstractmethod
-    async def find_all(self, limit: int = 100, offset: int = 0) -> list[QueryPlan]:
+    async def find_all(
+        self, limit: int = 100, offset: int = 0, title_search: str | None = None
+    ) -> list[QueryPlan]:
         """쿼리 실행 계획 목록을 조회한다.
 
         Args:
             limit: 최대 조회 수
             offset: 건너뛸 수
+            title_search: 제목 LIKE 검색어 (optional)
 
         Returns:
             쿼리 실행 계획 목록

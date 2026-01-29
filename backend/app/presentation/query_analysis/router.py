@@ -25,7 +25,7 @@ async def analyze_query(
     use_case: AnalyzeQueryUseCase = Depends(Provide[Container.analyze_query_use_case]),
 ) -> QueryPlanResponse:
     """SQL 쿼리를 분석하고 실행 계획을 반환한다."""
-    input_dto = AnalyzeQueryInput(query=request.query)
+    input_dto = AnalyzeQueryInput(query=request.query, title=request.title)
     output = await use_case.execute(input_dto)
     return QueryPlanResponse(**output.model_dump())
 
@@ -46,10 +46,11 @@ async def get_query_plan(
 async def list_query_plans(
     limit: int = Query(default=100, ge=1, le=1000, description="최대 조회 수"),
     offset: int = Query(default=0, ge=0, description="건너뛸 수"),
+    title_search: str | None = Query(default=None, max_length=255, description="제목 LIKE 검색어"),
     use_case: ListQueryPlansUseCase = Depends(Provide[Container.list_query_plans_use_case]),
 ) -> QueryPlanListResponse:
     """쿼리 실행 계획 목록을 조회한다."""
-    output = await use_case.execute(limit=limit, offset=offset)
+    output = await use_case.execute(limit=limit, offset=offset, title_search=title_search)
     return QueryPlanListResponse(
         items=[item.model_dump() for item in output.items],
         total=output.total,

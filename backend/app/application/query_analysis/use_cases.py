@@ -67,6 +67,7 @@ class AnalyzeQueryUseCase:
 
         query_plan = QueryPlan(
             query=input_dto.query,
+            title=input_dto.title,
             plan_raw=plan_raw if isinstance(plan_raw, dict) else plan_raw[0] if plan_raw else {},
             node_type=node_type,
             cost_estimate=cost_estimate,
@@ -80,6 +81,7 @@ class AnalyzeQueryUseCase:
         return AnalyzeQueryOutput(
             id=saved_plan.id,
             query=saved_plan.query,
+            title=saved_plan.title,
             node_type=saved_plan.node_type,
             cost_estimate=saved_plan.cost_estimate,
             execution_time_ms=saved_plan.execution_time_ms,
@@ -115,6 +117,7 @@ class GetQueryPlanUseCase:
         return AnalyzeQueryOutput(
             id=plan.id,
             query=plan.query,
+            title=plan.title,
             node_type=plan.node_type,
             cost_estimate=plan.cost_estimate,
             execution_time_ms=plan.execution_time_ms,
@@ -129,24 +132,35 @@ class ListQueryPlansUseCase:
     def __init__(self, repository: AbstractQueryAnalysisRepository) -> None:
         self._repository = repository
 
-    async def execute(self, limit: int = 100, offset: int = 0) -> QueryPlanListOutput:
+    async def execute(
+        self, limit: int = 100, offset: int = 0, title_search: str | None = None
+    ) -> QueryPlanListOutput:
         """쿼리 실행 계획 목록을 조회한다.
 
         Args:
             limit: 최대 조회 수
             offset: 건너뛸 수
+            title_search: 제목 LIKE 검색어 (optional)
 
         Returns:
             분석 결과 목록 DTO
         """
-        logger.debug("쿼리 실행 계획 목록 조회: limit=%d, offset=%d", limit, offset)
+        logger.debug(
+            "쿼리 실행 계획 목록 조회: limit=%d, offset=%d, title_search=%s",
+            limit,
+            offset,
+            title_search,
+        )
 
-        plans = await self._repository.find_all(limit=limit, offset=offset)
+        plans = await self._repository.find_all(
+            limit=limit, offset=offset, title_search=title_search
+        )
 
         items = [
             AnalyzeQueryOutput(
                 id=plan.id,
                 query=plan.query,
+                title=plan.title,
                 node_type=plan.node_type,
                 cost_estimate=plan.cost_estimate,
                 execution_time_ms=plan.execution_time_ms,

@@ -82,6 +82,7 @@ class QueryPlanModel(Base):
     )
     query_hash: Mapped[str] = mapped_column(String(64), nullable=False, comment="쿼리 해시 (SHA-256)")
     query: Mapped[str] = mapped_column(Text, nullable=False, comment="분석 대상 SQL")
+    title: Mapped[str | None] = mapped_column(String(255), nullable=True, comment="쿼리 제목")
     plan_raw: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, comment="EXPLAIN JSON 원본")
     node_type: Mapped[str] = mapped_column(String(50), nullable=False, comment="최상위 노드 유형")
     startup_cost: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, comment="시작 비용")
@@ -111,6 +112,7 @@ class QueryPlanModel(Base):
         return QueryPlan(
             id=self.id,
             query=self.query,
+            title=self.title,
             plan_raw=self.plan_raw,
             node_type=node_type,
             cost_estimate=CostEstimate(
@@ -136,6 +138,7 @@ class QueryPlanModel(Base):
             session_id=session_id,
             query_hash=compute_query_hash(entity.query),
             query=entity.query,
+            title=entity.title,
             plan_raw=entity.plan_raw,
             node_type=entity.node_type.value,
             startup_cost=entity.cost_estimate.startup_cost,

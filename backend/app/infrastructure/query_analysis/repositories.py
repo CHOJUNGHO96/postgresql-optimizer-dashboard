@@ -57,16 +57,18 @@ class SQLAlchemyQueryAnalysisRepository(AbstractQueryAnalysisRepository):
             logger.error("쿼리 실행 계획 조회 실패: %s", str(e))
             raise DatabaseConnectionError(detail=str(e))
 
-    async def find_all(self, limit: int = 100, offset: int = 0) -> list[QueryPlan]:
+    async def find_all(
+        self, limit: int = 100, offset: int = 0, title_search: str | None = None
+    ) -> list[QueryPlan]:
         """쿼리 실행 계획 목록을 조회한다."""
         try:
             async with self._session_factory() as session:
-                stmt = (
-                    select(QueryPlanModel)
-                    .order_by(QueryPlanModel.created_at.desc())
-                    .limit(limit)
-                    .offset(offset)
-                )
+                stmt = select(QueryPlanModel).order_by(QueryPlanModel.created_at.desc())
+
+                if title_search:
+                    stmt = stmt.where(QueryPlanModel.title.ilike(f"%{title_search}%"))
+
+                stmt = stmt.limit(limit).offset(offset)
                 result = await session.execute(stmt)
                 models = result.scalars().all()
                 return [model.to_entity() for model in models]

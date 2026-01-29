@@ -13,6 +13,7 @@ class AnalyzeQueryInput(BaseModel):
     """쿼리 분석 요청 DTO."""
 
     query: str = Field(min_length=1, description="분석할 SQL 쿼리")
+    title: str | None = Field(default=None, max_length=255, description="쿼리 제목")
 
 
 class AnalyzeQueryOutput(BaseModel):
@@ -20,6 +21,7 @@ class AnalyzeQueryOutput(BaseModel):
 
     id: UUID
     query: str
+    title: str | None
     node_type: PlanNodeType
     cost_estimate: CostEstimate
     execution_time_ms: float | None
