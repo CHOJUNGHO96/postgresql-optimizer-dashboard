@@ -37,7 +37,7 @@ class AnalysisSessionModel(Base):
     __table_args__ = (
         Index("ix_sessions_status", "status"),
         Index("ix_sessions_created_at", "created_at"),
-        {"comment": "분석 세션 테이블"},
+        {"schema": "pgs_analysis", "comment": "분석 세션 테이블"},
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -71,14 +71,14 @@ class QueryPlanModel(Base):
         Index("ix_query_plans_created_at", "created_at"),
         Index("ix_query_plans_node_type", "node_type"),
         Index("ix_query_plans_total_cost", "total_cost"),
-        {"comment": "쿼리 실행 계획 테이블"},
+        {"schema": "pgs_analysis", "comment": "쿼리 실행 계획 테이블"},
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, comment="고유 식별자"
     )
     session_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("analysis_sessions.id", ondelete="SET NULL"), nullable=True, comment="분석 세션 참조"
+        UUID(as_uuid=True), ForeignKey("pgs_analysis.analysis_sessions.id", ondelete="SET NULL"), nullable=True, comment="분석 세션 참조"
     )
     query_hash: Mapped[str] = mapped_column(String(64), nullable=False, comment="쿼리 해시 (SHA-256)")
     query: Mapped[str] = mapped_column(Text, nullable=False, comment="분석 대상 SQL")
@@ -162,17 +162,17 @@ class QueryPlanNodeModel(Base):
         Index("ix_plan_nodes_plan_id", "plan_id"),
         Index("ix_plan_nodes_parent_node_id", "parent_node_id"),
         Index("ix_plan_nodes_node_type", "node_type"),
-        {"comment": "실행 계획 노드 테이블"},
+        {"schema": "pgs_analysis", "comment": "실행 계획 노드 테이블"},
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, comment="노드 식별자"
     )
     plan_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("query_plans.id", ondelete="CASCADE"), nullable=False, comment="상위 계획 참조"
+        UUID(as_uuid=True), ForeignKey("pgs_analysis.query_plans.id", ondelete="CASCADE"), nullable=False, comment="상위 계획 참조"
     )
     parent_node_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("query_plan_nodes.id", ondelete="CASCADE"), nullable=True, comment="부모 노드 (self-reference)"
+        UUID(as_uuid=True), ForeignKey("pgs_analysis.query_plan_nodes.id", ondelete="CASCADE"), nullable=True, comment="부모 노드 (self-reference)"
     )
     depth: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="트리 깊이")
     node_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="동일 깊이 내 순서")
@@ -205,14 +205,14 @@ class OptimizationSuggestionModel(Base):
     __table_args__ = (
         Index("ix_suggestions_plan_id", "plan_id"),
         Index("ix_suggestions_severity", "severity"),
-        {"comment": "최적화 제안 테이블"},
+        {"schema": "pgs_analysis", "comment": "최적화 제안 테이블"},
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, comment="제안 식별자"
     )
     plan_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("query_plans.id", ondelete="CASCADE"), nullable=False, comment="관련 계획"
+        UUID(as_uuid=True), ForeignKey("pgs_analysis.query_plans.id", ondelete="CASCADE"), nullable=False, comment="관련 계획"
     )
     suggestion_type: Mapped[str] = mapped_column(String(50), nullable=False, comment="제안 유형")
     severity: Mapped[str] = mapped_column(String(20), nullable=False, default="info", comment="심각도 (info/warning/critical)")
@@ -236,7 +236,7 @@ class QueryStatisticsModel(Base):
     __table_args__ = (
         Index("ix_statistics_query_hash", "query_hash", unique=True),
         Index("ix_statistics_avg_time_ms", "avg_time_ms"),
-        {"comment": "쿼리 통계 집계 테이블"},
+        {"schema": "pgs_analysis", "comment": "쿼리 통계 집계 테이블"},
     )
 
     id: Mapped[uuid.UUID] = mapped_column(

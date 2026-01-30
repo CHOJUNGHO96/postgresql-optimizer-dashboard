@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { analyzeQuery, getQueryPlan, listQueryPlans, checkHealth } from '@/api';
-import type { AnalyzeQueryRequest, ApiError } from '@/types';
+import { analyzeQuery, analyzePlan, getQueryPlan, listQueryPlans, checkHealth } from '@/api';
+import type { AnalyzeQueryRequest, AnalyzePlanRequest, ApiError } from '@/types';
 
 // Query Keys
 export const queryKeys = {
@@ -20,6 +20,21 @@ export function useAnalyzeQuery() {
 
   return useMutation<Awaited<ReturnType<typeof analyzeQuery>>, ApiError, AnalyzeQueryRequest>({
     mutationFn: (request: AnalyzeQueryRequest) => analyzeQuery(request),
+    onSuccess: () => {
+      // Invalidate list queries to refresh the history
+      queryClient.invalidateQueries({ queryKey: queryKeys.lists() });
+    },
+  });
+}
+
+/**
+ * Hook to analyze EXPLAIN JSON directly
+ */
+export function useAnalyzePlan() {
+  const queryClient = useQueryClient();
+
+  return useMutation<Awaited<ReturnType<typeof analyzePlan>>, ApiError, AnalyzePlanRequest>({
+    mutationFn: (request: AnalyzePlanRequest) => analyzePlan(request),
     onSuccess: () => {
       // Invalidate list queries to refresh the history
       queryClient.invalidateQueries({ queryKey: queryKeys.lists() });

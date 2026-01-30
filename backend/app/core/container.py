@@ -5,7 +5,7 @@ dependency_injector를 사용하여 전체 의존성 그래프를 관리한다.
 
 from dependency_injector import containers, providers
 
-from app.application.query_analysis.use_cases import AnalyzeQueryUseCase, GetQueryPlanUseCase, ListQueryPlansUseCase
+from app.application.query_analysis.use_cases import AnalyzePlanUseCase, AnalyzeQueryUseCase, GetQueryPlanUseCase, ListQueryPlansUseCase
 from app.core.config import Settings
 from app.core.database import create_engine, create_session_factory
 from app.infrastructure.query_analysis.repositories import SQLAlchemyQueryAnalysisRepository
@@ -60,6 +60,11 @@ class Container(containers.DeclarativeContainer):
     # ─── 유스케이스 ───
     analyze_query_use_case = providers.Factory(
         AnalyzeQueryUseCase,
+        repository=query_analysis_repository,
+    )
+
+    analyze_plan_use_case = providers.Factory(
+        AnalyzePlanUseCase,
         repository=query_analysis_repository,
     )
 

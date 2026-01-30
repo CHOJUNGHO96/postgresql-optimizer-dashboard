@@ -35,14 +35,16 @@ export function SqlEditor({
   return (
     <div
       className={cn(
-        'overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700',
+        'overflow-auto rounded-lg border border-gray-200 dark:border-gray-700',
         'focus-within:ring-2 focus-within:ring-pg-500 focus-within:ring-offset-2 dark:focus-within:ring-offset-gray-900',
         className
       )}
+      style={{ maxHeight }}
     >
       <CodeMirror
         value={value}
         onChange={handleChange}
+        height="auto"
         extensions={[
           sql({
             dialect: PostgreSQL,
@@ -64,10 +66,9 @@ export function SqlEditor({
         }}
         style={{
           minHeight,
-          maxHeight,
           fontSize: '14px',
         }}
-        className="[&_.cm-editor]:!outline-none [&_.cm-gutters]:!border-r-0 [&_.cm-scroller]:!overflow-auto"
+        className="[&_.cm-editor]:!outline-none [&_.cm-gutters]:!border-r-0"
       />
     </div>
   );
