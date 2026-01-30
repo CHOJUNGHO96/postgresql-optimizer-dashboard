@@ -5,6 +5,7 @@ import { CostCard } from './CostCard';
 import { NodeTypeCard } from './NodeTypeBadge';
 import { BottleneckSummary } from './BottleneckSummary';
 import { OptimizationSuggestions } from './OptimizationSuggestions';
+import { AnalyzeMetricsCard } from './AnalyzeMetricsCard';
 import { SqlEditor } from '@/components/query';
 import { analyzePlan } from '@/lib/planAnalysis';
 import {
@@ -95,6 +96,14 @@ export function AnalysisResult({
       {/* Optimization Suggestions - NEW */}
       {planAnalysis && (
         <OptimizationSuggestions suggestions={planAnalysis.suggestions} />
+      )}
+
+      {/* ANALYZE Metrics - 실제 실행 분석 */}
+      {planAnalysis?.analyzeMetrics && (
+        <AnalyzeMetricsCard
+          analyzeMetrics={planAnalysis.analyzeMetrics}
+          flattenedNodes={planAnalysis.flattenedNodes}
+        />
       )}
 
       {/* Node Type */}

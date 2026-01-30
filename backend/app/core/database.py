@@ -3,7 +3,6 @@
 SQLAlchemy async engine 및 session 팩토리를 제공한다.
 """
 
-from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
@@ -27,14 +26,8 @@ def create_engine(database_url: str, schema: str = "public"):
         pool_size=10,
         max_overflow=20,
         pool_pre_ping=True,
+        connect_args={"server_settings": {"search_path": schema}},
     )
-
-    # 연결 시 search_path 설정
-    @event.listens_for(engine.sync_engine, "connect")
-    def set_search_path(dbapi_conn, connection_record):
-        cursor = dbapi_conn.cursor()
-        cursor.execute(f"SET search_path TO {schema}")
-        cursor.close()
 
     return engine
 

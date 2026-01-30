@@ -14,6 +14,9 @@ import type {
   OptimizationSuggestion,
   PlanAnalysisResult,
   SuggestionPriority,
+  AnalyzeMetrics,
+  NodeTiming,
+  EstimateAccuracy,
 } from '@/types';
 
 /**
@@ -27,6 +30,19 @@ export function flattenPlanTree(
   const nodes: FlattenedNode[] = [];
   const id = generateNodeId(plan, depth, parentId);
 
+  // ANALYZE 메트릭 추출
+  const actualRows = plan['Actual Rows'];
+  const actualLoops = plan['Actual Loops'];
+  const actualStartupTime = plan['Actual Startup Time'];
+  const actualTotalTime = plan['Actual Total Time'];
+  const planRows = plan['Plan Rows'] ?? 0;
+
+  // 추정 정확도 계산 (planRows 대비 actualRows 비율)
+  let rowsAccuracy: number | undefined;
+  if (actualRows !== undefined && planRows > 0) {
+    rowsAccuracy = actualRows / planRows;
+  }
+
   const flatNode: FlattenedNode = {
     id,
     depth,
@@ -34,7 +50,7 @@ export function flattenPlanTree(
     relationName: plan['Relation Name'] || plan['Alias'],
     totalCost: plan['Total Cost'] ?? 0,
     startupCost: plan['Startup Cost'] ?? 0,
-    planRows: plan['Plan Rows'] ?? 0,
+    planRows,
     planWidth: plan['Plan Width'] ?? 0,
     filter: plan['Filter'],
     indexCond: plan['Index Cond'],
@@ -44,6 +60,12 @@ export function flattenPlanTree(
     cteName: plan['CTE Name'],
     parentId,
     raw: plan,
+    // ANALYZE 메트릭
+    actualRows,
+    actualLoops,
+    actualStartupTime,
+    actualTotalTime,
+    rowsAccuracy,
   };
 
   nodes.push(flatNode);
@@ -327,16 +349,22 @@ export function generateOptimizationSuggestions(
 export function analyzePlan(planRaw: Record<string, unknown>): PlanAnalysisResult | null {
   // EXPLAIN 결과 구조 파싱 (배열 또는 단일 객체)
   let rootPlan: PlanNode | null = null;
+  let executionTime = 0;
+  let planningTime = 0;
 
   if (Array.isArray(planRaw)) {
-    // [{ "Plan": {...} }] 형식
+    // [{ "Plan": {...}, "Execution Time": ..., "Planning Time": ... }] 형식
     const firstItem = planRaw[0];
     if (firstItem && typeof firstItem === 'object' && 'Plan' in firstItem) {
       rootPlan = (firstItem as { Plan: PlanNode }).Plan;
+      executionTime = (firstItem as { 'Execution Time'?: number })['Execution Time'] ?? 0;
+      planningTime = (firstItem as { 'Planning Time'?: number })['Planning Time'] ?? 0;
     }
   } else if ('Plan' in planRaw) {
     // { "Plan": {...} } 형식
     rootPlan = (planRaw as { Plan: PlanNode }).Plan;
+    executionTime = (planRaw as { 'Execution Time'?: number })['Execution Time'] ?? 0;
+    planningTime = (planRaw as { 'Planning Time'?: number })['Planning Time'] ?? 0;
   } else if ('Node Type' in planRaw) {
     // 직접 Plan 노드
     rootPlan = planRaw as unknown as PlanNode;
@@ -351,6 +379,7 @@ export function analyzePlan(planRaw: Record<string, unknown>): PlanAnalysisResul
   const costContributions = calculateCostContributions(flattenedNodes, rootCost);
   const bottlenecks = identifyBottlenecks(flattenedNodes, costContributions);
   const suggestions = generateOptimizationSuggestions(flattenedNodes, costContributions);
+  const analyzeMetrics = extractAnalyzeMetrics(flattenedNodes, executionTime, planningTime);
 
   return {
     flattenedNodes,
@@ -359,7 +388,135 @@ export function analyzePlan(planRaw: Record<string, unknown>): PlanAnalysisResul
     suggestions,
     totalCost: rootCost,
     rootNodeType: rootPlan['Node Type'] || 'Unknown',
+    analyzeMetrics,
   };
+}
+
+/**
+ * ANALYZE 메트릭 추출
+ */
+export function extractAnalyzeMetrics(
+  nodes: FlattenedNode[],
+  executionTime: number,
+  planningTime: number
+): AnalyzeMetrics | undefined {
+  // ANALYZE 데이터가 있는지 확인
+  const hasAnalyzeData = nodes.some(
+    (node) => node.actualRows !== undefined || node.actualTotalTime !== undefined
+  );
+
+  if (!hasAnalyzeData && executionTime === 0) {
+    return undefined;
+  }
+
+  // 노드별 타이밍 정보 추출
+  const nodeTimings: NodeTiming[] = [];
+  const totalActualTime = executionTime > 0 ? executionTime : calculateTotalActualTime(nodes);
+
+  for (const node of nodes) {
+    if (node.actualTotalTime !== undefined) {
+      const actualTime = node.actualTotalTime * (node.actualLoops ?? 1);
+      const timePercentage = totalActualTime > 0 ? (actualTime / totalActualTime) * 100 : 0;
+      const rowsAccuracy =
+        node.planRows > 0 && node.actualRows !== undefined
+          ? node.actualRows / node.planRows
+          : 1;
+
+      nodeTimings.push({
+        nodeId: node.id,
+        nodeType: node.nodeType,
+        actualTime,
+        timePercentage,
+        actualRows: node.actualRows ?? 0,
+        planRows: node.planRows,
+        rowsAccuracy,
+        loops: node.actualLoops ?? 1,
+      });
+    }
+  }
+
+  // 시간 비율 기준 정렬
+  nodeTimings.sort((a, b) => b.timePercentage - a.timePercentage);
+
+  return {
+    executionTime,
+    planningTime,
+    nodeTimings,
+    hasAnalyzeData,
+  };
+}
+
+/**
+ * 루트 노드의 총 실제 시간 계산
+ */
+function calculateTotalActualTime(nodes: FlattenedNode[]): number {
+  // depth가 0인 루트 노드 찾기
+  const rootNode = nodes.find((n) => n.depth === 0);
+  if (rootNode?.actualTotalTime !== undefined) {
+    return rootNode.actualTotalTime * (rootNode.actualLoops ?? 1);
+  }
+  return 0;
+}
+
+/**
+ * 추정 정확도 분석
+ */
+export function calculateEstimateAccuracy(nodes: FlattenedNode[]): EstimateAccuracy[] {
+  const accuracies: EstimateAccuracy[] = [];
+
+  for (const node of nodes) {
+    if (node.actualRows !== undefined && node.planRows > 0) {
+      const accuracy = node.actualRows / node.planRows;
+      let severity: EstimateAccuracy['severity'];
+
+      if (accuracy >= 0.5 && accuracy <= 2) {
+        severity = 'accurate';
+      } else if (accuracy > 2 && accuracy <= 10) {
+        severity = 'underestimate';
+      } else if (accuracy < 0.5 && accuracy >= 0.1) {
+        severity = 'overestimate';
+      } else {
+        severity = 'severe';
+      }
+
+      accuracies.push({
+        nodeId: node.id,
+        nodeType: node.nodeType,
+        estimatedRows: node.planRows,
+        actualRows: node.actualRows,
+        accuracy,
+        severity,
+      });
+    }
+  }
+
+  // 심각도 기준 정렬 (severe > underestimate/overestimate > accurate)
+  const severityOrder: Record<EstimateAccuracy['severity'], number> = {
+    severe: 0,
+    underestimate: 1,
+    overestimate: 1,
+    accurate: 2,
+  };
+
+  return accuracies.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
+}
+
+/**
+ * 시간 기준 병목 노드 식별
+ */
+export function identifyTimeBottlenecks(nodes: FlattenedNode[]): FlattenedNode[] {
+  const nodesWithTime = nodes.filter(
+    (n) => n.actualTotalTime !== undefined && n.actualTotalTime > 0
+  );
+
+  // 실제 시간 기준 정렬하여 상위 5개 반환
+  return nodesWithTime
+    .sort((a, b) => {
+      const timeA = (a.actualTotalTime ?? 0) * (a.actualLoops ?? 1);
+      const timeB = (b.actualTotalTime ?? 0) * (b.actualLoops ?? 1);
+      return timeB - timeA;
+    })
+    .slice(0, 5);
 }
 
 // === Helper Functions ===

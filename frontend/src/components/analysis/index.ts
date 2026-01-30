@@ -6,3 +6,4 @@ export * from './AnalysisResult';
 export * from './HistoryTable';
 export * from './BottleneckSummary';
 export * from './OptimizationSuggestions';
+export * from './AnalyzeMetricsCard';
