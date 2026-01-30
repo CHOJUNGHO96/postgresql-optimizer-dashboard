@@ -17,6 +17,17 @@ class AnalyzeQueryRequest(BaseModel):
     title: str | None = Field(default=None, max_length=255, description="쿼리 제목", examples=["사용자 조회"])
 
 
+class AnalyzePlanRequest(BaseModel):
+    """EXPLAIN JSON 직접 분석 요청 스키마."""
+
+    plan_json: dict[str, Any] | list[dict[str, Any]] = Field(
+        description="EXPLAIN (FORMAT JSON) 결과",
+        examples=[[{"Plan": {"Node Type": "Seq Scan", "Relation Name": "users"}}]],
+    )
+    title: str | None = Field(default=None, max_length=255, description="쿼리 제목")
+    original_query: str | None = Field(default=None, description="원본 SQL 쿼리 (선택사항)")
+
+
 class CostEstimateResponse(BaseModel):
     """비용 추정 응답 스키마."""
 

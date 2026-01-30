@@ -3,6 +3,7 @@ import type {
   QueryPlanResponse,
   QueryPlanListResponse,
   AnalyzeQueryRequest,
+  AnalyzePlanRequest,
   HealthResponse,
 } from '@/types';
 
@@ -11,6 +12,7 @@ import type {
  */
 const ENDPOINTS = {
   ANALYZE: '/query-analysis/analyze',
+  ANALYZE_PLAN: '/query-analysis/analyze-plan',
   GET_PLAN: (id: string) => `/query-analysis/${id}`,
   LIST_PLANS: '/query-analysis/',
   HEALTH: '/health',
@@ -21,6 +23,14 @@ const ENDPOINTS = {
  */
 export async function analyzeQuery(request: AnalyzeQueryRequest): Promise<QueryPlanResponse> {
   const response = await apiClient.post<QueryPlanResponse>(ENDPOINTS.ANALYZE, request);
+  return response.data;
+}
+
+/**
+ * Analyze EXPLAIN JSON directly
+ */
+export async function analyzePlan(request: AnalyzePlanRequest): Promise<QueryPlanResponse> {
+  const response = await apiClient.post<QueryPlanResponse>(ENDPOINTS.ANALYZE_PLAN, request);
   return response.data;
 }
 

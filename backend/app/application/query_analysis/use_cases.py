@@ -7,7 +7,7 @@ import logging
 from uuid import UUID
 
 from app.application.exceptions import QueryAnalysisFailedError
-from app.application.query_analysis.dtos import AnalyzeQueryInput, AnalyzeQueryOutput, QueryPlanListOutput
+from app.application.query_analysis.dtos import AnalyzePlanInput, AnalyzeQueryInput, AnalyzeQueryOutput, QueryPlanListOutput
 from app.domain.exceptions import InvalidQueryError, QueryNotFoundError
 from app.domain.query_analysis.entities import QueryPlan
 from app.domain.query_analysis.repositories import AbstractQueryAnalysisRepository
@@ -77,6 +77,71 @@ class AnalyzeQueryUseCase:
         # 내부 DB에 결과 저장
         saved_plan = await self._repository.save(query_plan)
         logger.info("쿼리 분석 완료: plan_id=%s", saved_plan.id)
+
+        return AnalyzeQueryOutput(
+            id=saved_plan.id,
+            query=saved_plan.query,
+            title=saved_plan.title,
+            node_type=saved_plan.node_type,
+            cost_estimate=saved_plan.cost_estimate,
+            execution_time_ms=saved_plan.execution_time_ms,
+            plan_raw=saved_plan.plan_raw,
+            created_at=saved_plan.created_at,
+        )
+
+
+class AnalyzePlanUseCase:
+    """EXPLAIN JSON을 직접 입력받아 분석하는 유스케이스."""
+
+    def __init__(self, repository: AbstractQueryAnalysisRepository) -> None:
+        self._repository = repository
+
+    async def execute(self, input_dto: AnalyzePlanInput) -> AnalyzeQueryOutput:
+        """EXPLAIN JSON을 분석하고 결과를 저장한다.
+
+        Args:
+            input_dto: EXPLAIN JSON 분석 요청 DTO
+
+        Returns:
+            분석 결과 DTO
+        """
+        logger.info("EXPLAIN JSON 직접 분석 시작")
+
+        plan_raw = input_dto.plan_json
+
+        # EXPLAIN 결과에서 엔티티 구성
+        plan_data = plan_raw[0].get("Plan", {}) if isinstance(plan_raw, list) else plan_raw.get("Plan", {})
+
+        node_type_str = plan_data.get("Node Type", "Other")
+        try:
+            node_type = PlanNodeType(node_type_str)
+        except ValueError:
+            node_type = PlanNodeType.OTHER
+
+        cost_estimate = CostEstimate(
+            startup_cost=plan_data.get("Startup Cost", 0.0),
+            total_cost=plan_data.get("Total Cost", 0.0),
+            plan_rows=plan_data.get("Plan Rows", 0),
+            plan_width=plan_data.get("Plan Width", 0),
+        )
+
+        execution_time_ms = plan_raw[0].get("Execution Time") if isinstance(plan_raw, list) else None
+
+        # 원본 쿼리가 없으면 빈 문자열 대신 플레이스홀더 사용
+        query = input_dto.original_query or "-- EXPLAIN JSON 직접 입력"
+
+        query_plan = QueryPlan(
+            query=query,
+            title=input_dto.title,
+            plan_raw=plan_raw if isinstance(plan_raw, dict) else plan_raw[0] if plan_raw else {},
+            node_type=node_type,
+            cost_estimate=cost_estimate,
+            execution_time_ms=execution_time_ms,
+        )
+
+        # 내부 DB에 결과 저장
+        saved_plan = await self._repository.save(query_plan)
+        logger.info("EXPLAIN JSON 분석 완료: plan_id=%s", saved_plan.id)
 
         return AnalyzeQueryOutput(
             id=saved_plan.id,

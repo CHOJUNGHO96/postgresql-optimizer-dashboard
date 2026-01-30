@@ -16,6 +16,14 @@ class AnalyzeQueryInput(BaseModel):
     title: str | None = Field(default=None, max_length=255, description="쿼리 제목")
 
 
+class AnalyzePlanInput(BaseModel):
+    """EXPLAIN JSON 직접 분석 요청 DTO."""
+
+    plan_json: dict[str, Any] | list[dict[str, Any]] = Field(description="EXPLAIN (FORMAT JSON) 결과")
+    title: str | None = Field(default=None, max_length=255, description="쿼리 제목")
+    original_query: str | None = Field(default=None, description="원본 SQL 쿼리 (선택사항)")
+
+
 class AnalyzeQueryOutput(BaseModel):
     """쿼리 분석 결과 DTO."""
 
