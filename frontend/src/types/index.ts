@@ -28,6 +28,12 @@ export interface AnalyzeQueryRequest {
   title?: string;
 }
 
+export interface AnalyzePlanRequest {
+  plan_json: Record<string, unknown> | Record<string, unknown>[];
+  title?: string;
+  original_query?: string;
+}
+
 export interface HealthResponse {
   status: string;
 }
@@ -122,6 +128,15 @@ export interface FlattenedNode {
   cteName?: string;
   parentId?: string;
   raw: PlanNode;
+
+  // ANALYZE 메트릭
+  actualRows?: number;
+  actualLoops?: number;
+  actualStartupTime?: number;
+  actualTotalTime?: number;
+
+  // 추정 정확도 (파생) - actualRows / planRows
+  rowsAccuracy?: number;
 }
 
 /** 비용 기여도 정보 */
@@ -166,4 +181,36 @@ export interface PlanAnalysisResult {
   suggestions: OptimizationSuggestion[];
   totalCost: number;
   rootNodeType: string;
+  // ANALYZE 메트릭 (있는 경우)
+  analyzeMetrics?: AnalyzeMetrics;
+}
+
+/** ANALYZE 실행 메트릭 */
+export interface AnalyzeMetrics {
+  executionTime: number;
+  planningTime: number;
+  nodeTimings: NodeTiming[];
+  hasAnalyzeData: boolean;
+}
+
+/** 노드별 타이밍 정보 */
+export interface NodeTiming {
+  nodeId: string;
+  nodeType: string;
+  actualTime: number;
+  timePercentage: number;
+  actualRows: number;
+  planRows: number;
+  rowsAccuracy: number; // 1.0 = 정확, >1 = 과소추정, <1 = 과대추정
+  loops: number;
+}
+
+/** 추정 정확도 분석 */
+export interface EstimateAccuracy {
+  nodeId: string;
+  nodeType: string;
+  estimatedRows: number;
+  actualRows: number;
+  accuracy: number;
+  severity: 'accurate' | 'underestimate' | 'overestimate' | 'severe';
 }

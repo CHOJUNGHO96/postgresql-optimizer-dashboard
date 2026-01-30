@@ -5,10 +5,11 @@ from uuid import UUID
 from dependency_injector.wiring import Provide, inject
 from fastapi import APIRouter, Depends, Query
 
-from app.application.query_analysis.dtos import AnalyzeQueryInput
-from app.application.query_analysis.use_cases import AnalyzeQueryUseCase, GetQueryPlanUseCase, ListQueryPlansUseCase
+from app.application.query_analysis.dtos import AnalyzePlanInput, AnalyzeQueryInput
+from app.application.query_analysis.use_cases import AnalyzePlanUseCase, AnalyzeQueryUseCase, GetQueryPlanUseCase, ListQueryPlansUseCase
 from app.core.container import Container
 from app.presentation.query_analysis.schemas import (
+    AnalyzePlanRequest,
     AnalyzeQueryRequest,
     QueryPlanListResponse,
     QueryPlanResponse,
@@ -26,6 +27,22 @@ async def analyze_query(
 ) -> QueryPlanResponse:
     """SQL 쿼리를 분석하고 실행 계획을 반환한다."""
     input_dto = AnalyzeQueryInput(query=request.query, title=request.title)
+    output = await use_case.execute(input_dto)
+    return QueryPlanResponse(**output.model_dump())
+
+
+@router.post("/analyze-plan", response_model=QueryPlanResponse, status_code=201)
+@inject
+async def analyze_plan(
+    request: AnalyzePlanRequest,
+    use_case: AnalyzePlanUseCase = Depends(Provide[Container.analyze_plan_use_case]),
+) -> QueryPlanResponse:
+    """EXPLAIN JSON을 직접 입력받아 분석한다."""
+    input_dto = AnalyzePlanInput(
+        plan_json=request.plan_json,
+        title=request.title,
+        original_query=request.original_query,
+    )
     output = await use_case.execute(input_dto)
     return QueryPlanResponse(**output.model_dump())
 
