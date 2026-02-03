@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     DB_USER: str = "postgres"
     DB_PASSWORD: str = "postgres"
     DB_NAME: str = "optimizer_dashboard"
-    DB_SCHEMA: str = "public"
+    DB_SCHEMA: str = "pgs_analysis"
 
     # 분석 대상 PostgreSQL DB
     TARGET_DB_HOST: str = "localhost"
@@ -45,6 +45,21 @@ class Settings(BaseSettings):
 
     # 환경
     APP_ENV: str = "development"
+
+    # AI 모델 API 키
+    CLAUDE_API_KEY: str | None = None
+    CLAUDE_MODEL: str = "claude-3-5-sonnet-20241022"
+
+    GLM_API_KEY: str | None = None
+    GLM_MODEL: str = "glm-4.5-flash"
+
+    GEMINI_API_KEY: str | None = None
+    GEMINI_MODEL: str = "gemini-2.5-flash"
+
+    # AI 최적화 설정
+    AI_OPTIMIZATION_ENABLED: bool = True
+    AI_DEFAULT_MODEL: str = "claude-3-5-sonnet-20241022"
+    AI_TIMEOUT_SECONDS: int = 30
 
     @computed_field
     @property

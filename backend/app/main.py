@@ -13,8 +13,12 @@ from app.core.config import get_settings
 from app.core.container import Container
 from app.core.errors import register_error_handlers
 from app.core.logging import setup_logging
+from app.presentation.ai_optimization.router import router as ai_optimization_router
 from app.presentation.middleware import RequestLoggingMiddleware
-from app.presentation.query_analysis.router import health_router, router as query_analysis_router
+from app.presentation.query_analysis.router import (
+    health_router,
+    router as query_analysis_router,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -24,12 +28,24 @@ async def lifespan(app: FastAPI):
     """애플리케이션 라이프사이클 관리."""
     logger.info("애플리케이션 시작")
     yield
-    # 종료 시 DB 엔진 정리
+    # 종료 시 리소스 정리
     container: Container = app.state.container
+
+    # DB 엔진 정리
     db_engine = container.db_engine()
     target_db_engine = container.target_db_engine()
     await db_engine.dispose()
     await target_db_engine.dispose()
+
+    # AI 클라이언트 정리
+    try:
+        gemini_client = container.gemini_client()
+        if hasattr(gemini_client, 'close'):
+            await gemini_client.close()
+            logger.info("Gemini 클라이언트 종료 완료")
+    except Exception as e:
+        logger.warning(f"Gemini 클라이언트 종료 중 에러 (무시): {e}")
+
     logger.info("애플리케이션 종료")
 
 
@@ -62,6 +78,7 @@ def create_app() -> FastAPI:
     # 라우터 등록
     app.include_router(health_router)
     app.include_router(query_analysis_router)
+    app.include_router(ai_optimization_router)
 
     logger.info("FastAPI 앱 초기화 완료 (env=%s)", settings.APP_ENV)
 

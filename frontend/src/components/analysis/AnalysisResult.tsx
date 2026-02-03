@@ -4,9 +4,10 @@ import { Card, CardHeader, CardTitle, CardContent, JsonTreeView, Badge } from '@
 import { CostCard } from './CostCard';
 import { NodeTypeCard } from './NodeTypeBadge';
 import { BottleneckSummary } from './BottleneckSummary';
-import { OptimizationSuggestions } from './OptimizationSuggestions';
 import { AnalyzeMetricsCard } from './AnalyzeMetricsCard';
 import { SqlEditor } from '@/components/query';
+import { OptimizeButton, OptimizationHistory } from '@/components/optimization';
+import { useOptimizations } from '@/hooks/useQueryOptimization';
 import { analyzePlan } from '@/lib/planAnalysis';
 import {
   formatExecutionTime,
@@ -30,6 +31,9 @@ export function AnalysisResult({
 }: AnalysisResultProps) {
   const severity = getCostSeverity(result.cost_estimate.total_cost);
   const severityStyles = getCostSeverityStyles(severity);
+
+  // React Query 훅 사용으로 자동 새로고침 대응
+  const { data: optimizations = [], isLoading } = useOptimizations(result.id);
 
   // 실행 계획 분석
   const planAnalysis = useMemo(() => {
@@ -70,20 +74,30 @@ export function AnalysisResult({
               </div>
             </div>
           </div>
-          <Badge
-            variant={
-              severity === 'low'
-                ? 'success'
-                : severity === 'medium'
-                ? 'warning'
-                : 'danger'
-            }
-            size="lg"
-          >
-            비용 수준: {severityStyles.label}
-          </Badge>
+          <div className="flex items-center gap-3">
+            <Badge
+              variant={
+                severity === 'low'
+                  ? 'success'
+                  : severity === 'medium'
+                  ? 'warning'
+                  : 'danger'
+              }
+              size="lg"
+            >
+              비용 수준: {severityStyles.label}
+            </Badge>
+            <OptimizeButton planId={result.id} />
+          </div>
         </div>
       </Card>
+
+      {/* AI 최적화 이력 */}
+      <OptimizationHistory
+        optimizations={optimizations}
+        originalQuery={result.query}
+        isLoading={isLoading}
+      />
 
       {/* Bottleneck Summary - NEW */}
       {planAnalysis && (
@@ -91,11 +105,6 @@ export function AnalysisResult({
           bottlenecks={planAnalysis.bottlenecks}
           totalCost={planAnalysis.totalCost}
         />
-      )}
-
-      {/* Optimization Suggestions - NEW */}
-      {planAnalysis && (
-        <OptimizationSuggestions suggestions={planAnalysis.suggestions} />
       )}
 
       {/* ANALYZE Metrics - 실제 실행 분석 */}

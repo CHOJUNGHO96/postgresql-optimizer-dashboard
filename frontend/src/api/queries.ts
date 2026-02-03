@@ -6,6 +6,10 @@ import type {
   AnalyzePlanRequest,
   HealthResponse,
 } from '@/types';
+import type {
+  OptimizeQueryRequest,
+  OptimizedQueryResponse,
+} from '@/types/optimization';
 
 /**
  * API Endpoints
@@ -15,6 +19,10 @@ const ENDPOINTS = {
   ANALYZE_PLAN: '/query-analysis/analyze-plan',
   GET_PLAN: (id: string) => `/query-analysis/${id}`,
   LIST_PLANS: '/query-analysis/',
+  OPTIMIZE_QUERY: (planId: string) => `/query-analysis/${planId}/optimize`,
+  GET_OPTIMIZATIONS: (planId: string) => `/query-analysis/${planId}/optimize`,
+  GET_OPTIMIZATION: (planId: string, optimizationId: string) =>
+    `/query-analysis/${planId}/optimize/${optimizationId}`,
   HEALTH: '/health',
 } as const;
 
@@ -60,5 +68,44 @@ export async function listQueryPlans(
  */
 export async function checkHealth(): Promise<HealthResponse> {
   const response = await apiClient.get<HealthResponse>(ENDPOINTS.HEALTH);
+  return response.data;
+}
+
+/**
+ * Optimize query using AI
+ */
+export async function optimizeQuery(
+  planId: string,
+  request: OptimizeQueryRequest
+): Promise<OptimizedQueryResponse> {
+  const response = await apiClient.post<OptimizedQueryResponse>(
+    ENDPOINTS.OPTIMIZE_QUERY(planId),
+    request
+  );
+  return response.data;
+}
+
+/**
+ * List optimization history for a query plan
+ */
+export async function listOptimizations(
+  planId: string
+): Promise<OptimizedQueryResponse[]> {
+  const response = await apiClient.get<OptimizedQueryResponse[]>(
+    ENDPOINTS.GET_OPTIMIZATIONS(planId)
+  );
+  return response.data;
+}
+
+/**
+ * Get a specific optimization by ID
+ */
+export async function getOptimization(
+  planId: string,
+  optimizationId: string
+): Promise<OptimizedQueryResponse> {
+  const response = await apiClient.get<OptimizedQueryResponse>(
+    ENDPOINTS.GET_OPTIMIZATION(planId, optimizationId)
+  );
   return response.data;
 }
