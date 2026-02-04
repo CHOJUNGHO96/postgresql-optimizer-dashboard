@@ -1,10 +1,11 @@
 """프롬프트 최적화 및 EXPLAIN JSON 압축 유틸리티."""
 
+import json
 import logging
-from dataclasses import dataclass
 from typing import Any
+from copy import deepcopy
 
-from .token_counter import count_prompt_tokens
+from .token_counter import count_tokens, count_prompt_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -72,24 +73,6 @@ PRESERVE_FIELDS = {
     "Index Name",  # 인덱스 최적화에 필수
     "Plans",  # 자식 노드 (재귀 압축)
 }
-
-
-@dataclass
-class CompressionStage:
-    """압축 단계 정의."""
-
-    name: str
-    reduction_ratio: float
-    description: str
-
-
-# 압축 단계 정의 (mild → moderate → aggressive → extreme)
-COMPRESSION_STAGES = [
-    CompressionStage("mild", 0.15, "Light compression - 기본 블록 통계 제거"),
-    CompressionStage("moderate", 0.35, "Moderate compression - 스키마/별칭 제거"),
-    CompressionStage("aggressive", 0.55, "Aggressive compression - 조건절 축소"),
-    CompressionStage("extreme", 0.75, "Extreme compression - 최대 압축"),
-]
 
 
 class PromptOptimizer:
@@ -196,19 +179,6 @@ class PromptOptimizer:
         return explain_json
 
     @staticmethod
-    def _remove_schema_context(explain_json: dict[str, Any]) -> dict[str, Any]:
-        """스키마 컨텍스트를 완전히 제거하는 폴백 전략.
-
-        Args:
-            explain_json: EXPLAIN JSON
-
-        Returns:
-            dict: 스키마 컨텍스트가 제거된 JSON
-        """
-        # 이미 스키마가 없으면 그대로 반환
-        return explain_json
-
-    @staticmethod
     def compress_to_target_tokens(
         original_query: str,
         explain_json: dict[str, Any],
@@ -258,26 +228,57 @@ class PromptOptimizer:
                 logger.info("Removed schema context to meet token limit")
                 return explain_json, None
 
-        # 2단계: 목표 감소율 계산
+        # 2단계: EXPLAIN JSON 압축 (mild)
         target_reduction = (current_tokens - target_tokens) / current_tokens
+        compressed_json = PromptOptimizer.compress_explain_json(
+            explain_json,
+            max(0.15, target_reduction),
+        )
 
-        # 3단계: 압축 단계 순회
-        for stage in COMPRESSION_STAGES:
-            compressed_json = PromptOptimizer.compress_explain_json(
-                explain_json,
-                max(stage.reduction_ratio, target_reduction),
-            )
+        new_tokens = count_prompt_tokens(
+            original_query,
+            compressed_json,
+            None,  # 스키마는 이미 제거 시도
+            model_family,
+        )
+        logger.info(f"Tokens after mild compression: {new_tokens:,}")
 
-            new_tokens = count_prompt_tokens(
-                original_query,
-                compressed_json,
-                None,  # 스키마는 이미 제거 시도
-                model_family,
-            )
-            logger.info(f"Tokens after {stage.name} compression: {new_tokens:,}")
+        if new_tokens <= target_tokens:
+            return compressed_json, None
 
-            if new_tokens <= target_tokens:
-                return compressed_json, None
+        # 3단계: 더 공격적인 압축 (moderate)
+        compressed_json = PromptOptimizer.compress_explain_json(
+            explain_json,
+            max(0.35, target_reduction),
+        )
+
+        new_tokens = count_prompt_tokens(
+            original_query,
+            compressed_json,
+            None,
+            model_family,
+        )
+        logger.info(f"Tokens after moderate compression: {new_tokens:,}")
+
+        if new_tokens <= target_tokens:
+            return compressed_json, None
+
+        # 4단계: 최대 압축 (aggressive)
+        compressed_json = PromptOptimizer.compress_explain_json(
+            explain_json,
+            max(0.55, target_reduction),
+        )
+
+        new_tokens = count_prompt_tokens(
+            original_query,
+            compressed_json,
+            None,
+            model_family,
+        )
+        logger.info(f"Tokens after aggressive compression: {new_tokens:,}")
+
+        if new_tokens <= target_tokens:
+            return compressed_json, None
 
         # 압축 실패
         raise ValueError(
