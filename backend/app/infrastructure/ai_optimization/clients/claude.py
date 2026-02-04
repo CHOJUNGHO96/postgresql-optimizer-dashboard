@@ -2,6 +2,7 @@
 
 from anthropic import AsyncAnthropic
 
+from app.core.model_configs import get_model_limits
 from app.infrastructure.ai_optimization.clients.base import BaseAIClient
 
 
@@ -19,9 +20,12 @@ class ClaudeAIClient(BaseAIClient):
 
     async def _call_api(self, prompt: str) -> str:
         """Claude API를 호출한다."""
+        # 모델별 출력 토큰 제한 동적 설정
+        model_limits = get_model_limits(self.model_name)
+
         message = await self.client.messages.create(
             model=self.model_name,
-            max_tokens=4096,
+            max_tokens=model_limits.safe_output_tokens,
             messages=[{"role": "user", "content": prompt}],
         )
 

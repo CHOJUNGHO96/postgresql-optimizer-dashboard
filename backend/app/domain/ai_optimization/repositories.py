@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 from uuid import UUID
 
-from app.domain.ai_optimization.entities import OptimizedQuery
+from app.domain.ai_optimization.entities import OptimizedQuery, OptimizationTask
 
 
 class AbstractAIOptimizationRepository(ABC):
@@ -54,5 +54,41 @@ class AbstractAIOptimizationRepository(ABC):
 
         Returns:
             삭제 성공 여부
+        """
+        pass
+
+    @abstractmethod
+    async def create_task(self, task: OptimizationTask) -> OptimizationTask:
+        """최적화 작업을 생성한다.
+
+        Args:
+            task: 생성할 작업 엔티티
+
+        Returns:
+            생성된 작업 엔티티
+        """
+        pass
+
+    @abstractmethod
+    async def find_task_by_id(self, task_id: UUID) -> OptimizationTask | None:
+        """ID로 최적화 작업을 조회한다.
+
+        Args:
+            task_id: 작업 식별자
+
+        Returns:
+            작업 엔티티 또는 None
+        """
+        pass
+
+    @abstractmethod
+    async def update_task(self, task: OptimizationTask) -> OptimizationTask:
+        """최적화 작업 상태를 업데이트한다.
+
+        Args:
+            task: 업데이트할 작업 엔티티
+
+        Returns:
+            업데이트된 작업 엔티티
         """
         pass

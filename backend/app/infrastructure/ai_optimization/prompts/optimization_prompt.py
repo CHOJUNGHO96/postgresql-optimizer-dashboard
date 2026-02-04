@@ -1,30 +1,132 @@
 """쿼리 최적화 프롬프트 템플릿."""
 
 import json
+import logging
 from typing import Any
+
+from app.core.model_configs import get_model_limits, get_model_family
+from app.infrastructure.ai_optimization.utils import (
+    count_prompt_tokens,
+    PromptOptimizer,
+)
+
+logger = logging.getLogger(__name__)
 
 
 def build_optimization_prompt(
     original_query: str,
     explain_json: dict[str, Any],
     schema_context: str | None = None,
-) -> str:
+    model_name: str = "claude-3-5-sonnet-20241022",
+    auto_compress: bool = True,
+) -> tuple[str, dict[str, Any]]:
     """쿼리 최적화 프롬프트를 생성한다.
 
     Args:
         original_query: 원본 SQL 쿼리
         explain_json: EXPLAIN JSON 결과
         schema_context: 선택적 스키마 정보
+        model_name: AI 모델 이름
+        auto_compress: 토큰 초과 시 자동 압축 여부
 
     Returns:
-        프롬프트 텍스트
+        tuple: (프롬프트 텍스트, 메타데이터)
+
+    Raises:
+        ValueError: 압축 후에도 토큰 제한 초과
     """
+    # 모델 설정 가져오기
+    model_limits = get_model_limits(model_name)
+    model_family_str = get_model_family(model_name).value
+
+    # 현재 토큰 수 계산
+    current_tokens = count_prompt_tokens(
+        original_query,
+        explain_json,
+        schema_context,
+        model_family_str,
+    )
+
+    logger.info(
+        f"Prompt tokens: {current_tokens:,} / {model_limits.safe_input_tokens:,} "
+        f"(model: {model_name})"
+    )
+
+    # 메타데이터 초기화
+    metadata = {
+        "token_count": current_tokens,
+        "compressed": False,
+        "compression_level": None,
+        "model_name": model_name,
+        "token_limit": model_limits.safe_input_tokens,
+    }
+
+    # 압축 여부 결정
+    compressed_json = explain_json
+    compressed_schema = schema_context
+
+    if auto_compress and current_tokens > model_limits.safe_input_tokens:
+        logger.warning(
+            f"Token limit exceeded: {current_tokens:,} > {model_limits.safe_input_tokens:,}. "
+            "Applying automatic compression..."
+        )
+
+        try:
+            compressed_json, compressed_schema = PromptOptimizer.compress_to_target_tokens(
+                original_query,
+                explain_json,
+                schema_context,
+                model_limits.safe_input_tokens,
+                model_family_str,
+            )
+
+            # 압축 후 토큰 수 재계산
+            new_tokens = count_prompt_tokens(
+                original_query,
+                compressed_json,
+                compressed_schema,
+                model_family_str,
+            )
+
+            # 압축 레벨 결정
+            reduction = (current_tokens - new_tokens) / current_tokens
+            if reduction < 0.2:
+                level = "mild"
+            elif reduction < 0.4:
+                level = "moderate"
+            else:
+                level = "aggressive"
+
+            metadata.update(
+                {
+                    "compressed": True,
+                    "compression_level": level,
+                    "token_count": new_tokens,
+                    "original_tokens": current_tokens,
+                    "reduction_percentage": reduction * 100,
+                }
+            )
+
+            logger.info(
+                f"Compression successful: {current_tokens:,} → {new_tokens:,} "
+                f"({reduction:.1%} reduction, level: {level})"
+            )
+
+        except ValueError as e:
+            logger.error(f"Compression failed: {e}")
+            raise ValueError(
+                f"Token limit exceeded for {model_name}. "
+                f"Current: {current_tokens:,}, Max: {model_limits.safe_input_tokens:,}. "
+                f"Unable to compress further."
+            ) from e
+
+    # 프롬프트 생성
     schema_section = ""
-    if schema_context:
+    if compressed_schema:
         schema_section = f"""
 ## 데이터베이스 스키마 컨텍스트
 
-{schema_context}
+{compressed_schema}
 """
 
     prompt = f"""당신은 PostgreSQL 쿼리 최적화 전문가입니다. 다음 SQL 쿼리와 실행 계획을 분석하고 최적화된 버전을 제공하세요.
@@ -38,7 +140,7 @@ def build_optimization_prompt(
 ## 실행 계획 (EXPLAIN JSON)
 
 ```json
-{json.dumps(explain_json, indent=2)}
+{json.dumps(compressed_json, indent=2)}
 ```
 {schema_section}
 
@@ -88,7 +190,7 @@ def build_optimization_prompt(
 - 유효한 JSON만 응답하고 추가 텍스트는 작성하지 마세요
 """
 
-    return prompt
+    return prompt, metadata
 
 
 def parse_optimization_response(response_text: str) -> dict[str, Any]:

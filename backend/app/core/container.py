@@ -6,9 +6,12 @@ dependency_injector를 사용하여 전체 의존성 그래프를 관리한다.
 from dependency_injector import containers, providers
 
 from app.application.ai_optimization.use_cases import (
+    CreateOptimizationTaskUseCase,
+    GetOptimizationTaskUseCase,
     GetOptimizationUseCase,
     GetOptimizationsUseCase,
     OptimizeQueryUseCase,
+    ProcessOptimizationTaskUseCase,
 )
 from app.application.query_analysis.use_cases import (
     AnalyzePlanUseCase,
@@ -18,6 +21,7 @@ from app.application.query_analysis.use_cases import (
 )
 from app.core.config import Settings
 from app.core.database import create_engine, create_session_factory
+from app.core.model_configs import get_model_limits
 from app.infrastructure.ai_optimization.clients import (
     ClaudeAIClient,
     GeminiAIClient,
@@ -29,6 +33,22 @@ from app.infrastructure.ai_optimization.repositories import (
 from app.infrastructure.query_analysis.repositories import (
     SQLAlchemyQueryAnalysisRepository,
 )
+
+
+# ─── Helper functions for timeout configuration ───
+def get_claude_timeout(model: str) -> int:
+    """Get timeout for Claude model."""
+    return get_model_limits(model).timeout_seconds
+
+
+def get_glm_timeout(model: str) -> int:
+    """Get timeout for GLM model."""
+    return get_model_limits(model).timeout_seconds
+
+
+def get_gemini_timeout(model: str) -> int:
+    """Get timeout for Gemini model."""
+    return get_model_limits(model).timeout_seconds
 
 
 class Container(containers.DeclarativeContainer):
@@ -104,26 +124,35 @@ class Container(containers.DeclarativeContainer):
         repository=query_analysis_repository,
     )
 
-    # ─── AI 클라이언트 ───
+    # ─── AI 클라이언트 (모델별 최적화된 타임아웃) ───
     claude_client = providers.Singleton(
         ClaudeAIClient,
         api_key=config.provided.CLAUDE_API_KEY,
         model_name=config.provided.CLAUDE_MODEL,
-        timeout=config.provided.AI_TIMEOUT_SECONDS,
+        timeout=providers.Factory(
+            get_claude_timeout,
+            model=config.provided.CLAUDE_MODEL,
+        ),
     )
 
     glm_client = providers.Singleton(
         GLMAIClient,
         api_key=config.provided.GLM_API_KEY,
         model_name=config.provided.GLM_MODEL,
-        timeout=config.provided.AI_TIMEOUT_SECONDS,
+        timeout=providers.Factory(
+            get_glm_timeout,
+            model=config.provided.GLM_MODEL,
+        ),
     )
 
     gemini_client = providers.Singleton(
         GeminiAIClient,
         api_key=config.provided.GEMINI_API_KEY,
         model_name=config.provided.GEMINI_MODEL,
-        timeout=config.provided.AI_TIMEOUT_SECONDS,
+        timeout=providers.Factory(
+            get_gemini_timeout,
+            model=config.provided.GEMINI_MODEL,
+        ),
     )
 
     ai_clients = providers.Dict(
@@ -149,4 +178,21 @@ class Container(containers.DeclarativeContainer):
     get_optimization_use_case = providers.Factory(
         GetOptimizationUseCase,
         optimization_repo=ai_optimization_repository,
+    )
+
+    # ─── AI 최적화 작업 관리 유스케이스 ───
+    create_optimization_task_use_case = providers.Factory(
+        CreateOptimizationTaskUseCase,
+        repository=ai_optimization_repository,
+    )
+
+    get_optimization_task_use_case = providers.Factory(
+        GetOptimizationTaskUseCase,
+        repository=ai_optimization_repository,
+    )
+
+    process_optimization_task_use_case = providers.Factory(
+        ProcessOptimizationTaskUseCase,
+        task_repo=ai_optimization_repository,
+        optimize_use_case=optimize_query_use_case,
     )

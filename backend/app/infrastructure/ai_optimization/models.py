@@ -4,12 +4,12 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import DateTime, Float, ForeignKey, Index, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
-from app.domain.ai_optimization.entities import OptimizedQuery
+from app.domain.ai_optimization.entities import OptimizedQuery, OptimizationTask, TaskStatus
 from app.domain.ai_optimization.value_objects import (
     AIModel,
     ConfidenceScore,
@@ -139,4 +139,120 @@ class OptimizedQueryModel(Base):
             changes_summary=entity.changes_summary,
             risk_assessment=entity.risk_assessment.value,
             created_at=entity.created_at,
+        )
+
+
+class OptimizationTaskModel(Base):
+    """최적화 작업 ORM 모델.
+
+    백그라운드 쿼리 최적화 작업 추적용 테이블.
+    """
+
+    __tablename__ = "optimization_tasks"
+    __table_args__ = (
+        Index("idx_optimization_tasks_plan_id", "plan_id"),
+        Index("idx_optimization_tasks_status", "status"),
+        Index("idx_optimization_tasks_status_created", "status", "created_at"),
+        {"schema": "pgs_analysis", "comment": "백그라운드 최적화 작업 추적 테이블"},
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        comment="작업 식별자",
+    )
+    plan_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("pgs_analysis.query_plans.id", ondelete="CASCADE"),
+        nullable=False,
+        comment="원본 쿼리 계획 참조",
+    )
+    ai_model: Mapped[str] = mapped_column(
+        String(100), nullable=False, comment="사용할 AI 모델명"
+    )
+    validate_optimization: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, comment="최적화 검증 여부"
+    )
+    include_schema_context: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, comment="스키마 컨텍스트 포함 여부"
+    )
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="pending", comment="작업 상태"
+    )
+    optimization_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("pgs_analysis.optimized_queries.id", ondelete="SET NULL"),
+        nullable=True,
+        comment="완료된 최적화 참조",
+    )
+    error_message: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="에러 메시지"
+    )
+    error_type: Mapped[str | None] = mapped_column(
+        String(50), nullable=True, comment="에러 타입"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        comment="생성 시각",
+    )
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="시작 시각",
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="완료 시각",
+    )
+    estimated_duration_seconds: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, comment="예상 소요 시간(초)"
+    )
+
+    # Relationships
+    plan: Mapped["QueryPlanModel"] = relationship(  # type: ignore[name-defined]
+        "QueryPlanModel", foreign_keys=[plan_id]
+    )
+    optimization: Mapped["OptimizedQueryModel"] = relationship(  # type: ignore[name-defined]
+        "OptimizedQueryModel", foreign_keys=[optimization_id]
+    )
+
+    def to_entity(self) -> OptimizationTask:
+        """ORM 모델을 도메인 엔티티로 변환한다."""
+        return OptimizationTask(
+            id=self.id,
+            plan_id=self.plan_id,
+            ai_model=AIModel(self.ai_model),
+            validate_optimization=self.validate_optimization,
+            include_schema_context=self.include_schema_context,
+            status=TaskStatus(self.status),
+            optimization_id=self.optimization_id,
+            error_message=self.error_message,
+            error_type=self.error_type,
+            created_at=self.created_at,
+            started_at=self.started_at,
+            completed_at=self.completed_at,
+            estimated_duration_seconds=self.estimated_duration_seconds,
+        )
+
+    @classmethod
+    def from_entity(cls, entity: OptimizationTask) -> "OptimizationTaskModel":
+        """도메인 엔티티를 ORM 모델로 변환한다."""
+        return cls(
+            id=entity.id,
+            plan_id=entity.plan_id,
+            ai_model=entity.ai_model.value,
+            validate_optimization=entity.validate_optimization,
+            include_schema_context=entity.include_schema_context,
+            status=entity.status.value,
+            optimization_id=entity.optimization_id,
+            error_message=entity.error_message,
+            error_type=entity.error_type,
+            created_at=entity.created_at,
+            started_at=entity.started_at,
+            completed_at=entity.completed_at,
+            estimated_duration_seconds=entity.estimated_duration_seconds,
         )

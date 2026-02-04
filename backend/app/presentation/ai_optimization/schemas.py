@@ -1,5 +1,6 @@
 """AI 최적화 API 스키마."""
 
+from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -56,3 +57,29 @@ class OptimizedQueryResponse(BaseModel):
     )
     risk_assessment: str = Field(description="위험도 평가 (low/medium/high)")
     created_at: str = Field(description="생성 시각 (ISO 8601)")
+
+
+class CreateTaskRequest(BaseModel):
+    """최적화 작업 생성 요청 스키마."""
+
+    ai_model: str = Field(
+        description="사용할 AI 모델 (claude-3-5-sonnet-20241022, glm-4.5-flash, gemini-2.5-flash)"
+    )
+    validate_optimization: bool = Field(default=False, description="최적화 검증 여부")
+    include_schema_context: bool = Field(default=False, description="스키마 컨텍스트 포함 여부")
+
+
+class TaskResponse(BaseModel):
+    """최적화 작업 응답 스키마."""
+
+    id: str = Field(description="작업 식별자")
+    plan_id: str = Field(description="원본 쿼리 계획 ID")
+    ai_model: str = Field(description="사용할 AI 모델")
+    status: str = Field(description="작업 상태 (pending/processing/completed/failed)")
+    optimization_id: str | None = Field(default=None, description="완료된 최적화 ID")
+    error_message: str | None = Field(default=None, description="에러 메시지")
+    error_type: str | None = Field(default=None, description="에러 타입")
+    created_at: datetime = Field(description="생성 시각")
+    started_at: datetime | None = Field(default=None, description="시작 시각")
+    completed_at: datetime | None = Field(default=None, description="완료 시각")
+    estimated_duration_seconds: int | None = Field(default=None, description="예상 소요 시간(초)")

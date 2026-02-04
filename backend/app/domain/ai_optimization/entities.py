@@ -1,6 +1,7 @@
 """AI 최적화 도메인 엔티티."""
 
 from datetime import UTC, datetime
+from enum import Enum
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -12,6 +13,15 @@ from app.domain.ai_optimization.value_objects import (
     OptimizationMetrics,
     RiskLevel,
 )
+
+
+class TaskStatus(str, Enum):
+    """최적화 작업 상태."""
+
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
 
 
 def _utcnow() -> datetime:
@@ -48,3 +58,50 @@ class OptimizedQuery(BaseModel):
         default=RiskLevel.MEDIUM, description="위험도 평가"
     )
     created_at: datetime = Field(default_factory=_utcnow, description="생성 시각")
+
+
+class OptimizationTask(BaseModel):
+    """최적화 작업 엔티티.
+
+    백그라운드에서 실행되는 쿼리 최적화 작업을 추적.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID = Field(default_factory=uuid4, description="작업 식별자")
+    plan_id: UUID = Field(description="원본 쿼리 계획 ID")
+    ai_model: AIModel = Field(description="사용할 AI 모델")
+    validate_optimization: bool = Field(default=False, description="최적화 검증 여부")
+    include_schema_context: bool = Field(default=False, description="스키마 컨텍스트 포함 여부")
+    status: TaskStatus = Field(default=TaskStatus.PENDING, description="작업 상태")
+    optimization_id: UUID | None = Field(default=None, description="완료된 최적화 ID")
+    error_message: str | None = Field(default=None, description="에러 메시지")
+    error_type: str | None = Field(default=None, description="에러 타입")
+    created_at: datetime = Field(default_factory=_utcnow, description="생성 시각")
+    started_at: datetime | None = Field(default=None, description="시작 시각")
+    completed_at: datetime | None = Field(default=None, description="완료 시각")
+    estimated_duration_seconds: int | None = Field(default=None, description="예상 소요 시간(초)")
+
+    def mark_as_processing(self) -> None:
+        """작업을 처리 중 상태로 변경한다."""
+        if self.status != TaskStatus.PENDING:
+            raise ValueError(f"Cannot process task with status {self.status}")
+        self.status = TaskStatus.PROCESSING
+        self.started_at = _utcnow()
+
+    def mark_as_completed(self, optimization_id: UUID) -> None:
+        """작업을 완료 상태로 변경한다."""
+        if self.status != TaskStatus.PROCESSING:
+            raise ValueError(f"Cannot complete task with status {self.status}")
+        self.status = TaskStatus.COMPLETED
+        self.optimization_id = optimization_id
+        self.completed_at = _utcnow()
+
+    def mark_as_failed(self, error_message: str, error_type: str = "unexpected") -> None:
+        """작업을 실패 상태로 변경한다."""
+        if self.status not in [TaskStatus.PENDING, TaskStatus.PROCESSING]:
+            raise ValueError(f"Cannot fail task with status {self.status}")
+        self.status = TaskStatus.FAILED
+        self.error_message = error_message
+        self.error_type = error_type
+        self.completed_at = _utcnow()

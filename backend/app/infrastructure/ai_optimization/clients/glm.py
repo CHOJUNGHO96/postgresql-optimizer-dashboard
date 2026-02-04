@@ -2,6 +2,7 @@
 
 from zhipuai import ZhipuAI
 
+from app.core.model_configs import get_model_limits
 from app.infrastructure.ai_optimization.clients.base import BaseAIClient
 
 
@@ -29,10 +30,14 @@ class GLMAIClient(BaseAIClient):
         # GLM SDK는 동기 API만 제공하므로 asyncio.to_thread 사용
         import asyncio
 
+        # 모델별 출력 토큰 제한 동적 설정
+        model_limits = get_model_limits(self.model_name)
+
         response = await asyncio.to_thread(
             self.client.chat.completions.create,
             model=self.model_name,
             messages=[{"role": "user", "content": prompt}],
+            max_tokens=model_limits.safe_output_tokens,
         )
 
         # Extract text from response

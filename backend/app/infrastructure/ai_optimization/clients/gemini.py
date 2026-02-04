@@ -3,13 +3,14 @@
 from google import genai
 from google.genai import errors
 
+from app.core.model_configs import get_model_limits
 from app.infrastructure.ai_optimization.clients.base import BaseAIClient
 
 
 class GeminiAIClient(BaseAIClient):
     """Gemini (Google) AI 클라이언트 구현."""
 
-    def __init__(self, api_key: str, model_name: str, timeout: int = 30) -> None:
+    def __init__(self, api_key: str, model_name: str, timeout: int = 60) -> None:
         """Gemini 클라이언트를 초기화한다.
 
         Args:
@@ -44,10 +45,16 @@ class GeminiAIClient(BaseAIClient):
             연결을 재사용하여 Singleton 패턴과 호환되도록 한다.
         """
         try:
+            # 모델별 출력 토큰 제한 동적 설정
+            model_limits = get_model_limits(self._model_name)
+
             aclient = await self._ensure_client()
             response = await aclient.models.generate_content(
                 model=self._model_name,
-                contents=prompt
+                contents=prompt,
+                config={
+                    "max_output_tokens": model_limits.safe_output_tokens,
+                }
             )
 
             if response.text:

@@ -1,5 +1,6 @@
 """AI 최적화 DTO (Data Transfer Objects)."""
 
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -79,4 +80,46 @@ class OptimizeQueryOutput(BaseModel):
             changes_summary=entity.changes_summary,
             risk_assessment=entity.risk_assessment.value,
             created_at=entity.created_at.isoformat(),
+        )
+
+
+class CreateTaskInput(BaseModel):
+    """최적화 작업 생성 입력 DTO."""
+
+    plan_id: UUID = Field(description="원본 쿼리 계획 ID")
+    ai_model: str = Field(description="사용할 AI 모델")
+    validate_optimization: bool = Field(default=False, description="최적화 검증 여부")
+    include_schema_context: bool = Field(default=False, description="스키마 컨텍스트 포함 여부")
+
+
+class TaskOutput(BaseModel):
+    """최적화 작업 출력 DTO."""
+
+    id: UUID = Field(description="작업 식별자")
+    plan_id: UUID = Field(description="원본 쿼리 계획 ID")
+    ai_model: str = Field(description="사용할 AI 모델")
+    status: str = Field(description="작업 상태")
+    optimization_id: UUID | None = Field(default=None, description="완료된 최적화 ID")
+    error_message: str | None = Field(default=None, description="에러 메시지")
+    error_type: str | None = Field(default=None, description="에러 타입")
+    created_at: datetime = Field(description="생성 시각")
+    started_at: datetime | None = Field(default=None, description="시작 시각")
+    completed_at: datetime | None = Field(default=None, description="완료 시각")
+    estimated_duration_seconds: int | None = Field(default=None, description="예상 소요 시간(초)")
+
+    @classmethod
+    def from_entity(cls, entity: Any) -> "TaskOutput":
+        """도메인 엔티티로부터 DTO를 생성한다."""
+        return cls(
+            id=entity.id,
+            plan_id=entity.plan_id,
+            ai_model=entity.ai_model.value,
+            status=entity.status.value,
+            optimization_id=entity.optimization_id,
+            error_message=entity.error_message,
+            error_type=entity.error_type,
+            created_at=entity.created_at,
+            started_at=entity.started_at,
+            completed_at=entity.completed_at,
+            estimated_duration_seconds=entity.estimated_duration_seconds,
         )
