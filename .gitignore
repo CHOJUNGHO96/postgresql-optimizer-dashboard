@@ -38,3 +38,6 @@ docker-compose.override.yml
 
 # Database
 *.sql.backup
+
+# Claude settings (may contain sensitive data)
+.claude/settings.local.json

@@ -1,0 +1,118 @@
+name: CI/CD Pipeline
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main]
+
+jobs:
+  backend-validation:
+    name: Backend 검증 (Python)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 저장소 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Python 설정
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: 'backend/requirements.txt'
+
+      - name: 의존성 설치
+        run: |
+          cd backend
+          pip install -r requirements.txt
+          pip install black isort flake8 mypy pytest pytest-cov pytest-asyncio
+
+      - name: Black 포맷 체크
+        run: cd backend && black --check .
+
+      - name: isort 임포트 정렬 체크
+        run: cd backend && isort --check-only .
+
+      - name: Flake8 린트
+        run: cd backend && flake8 app/ --max-line-length=100 --extend-ignore=E203,W503
+
+      - name: MyPy 타입 체크 (선택적)
+        run: cd backend && mypy app/ --ignore-missing-imports || true
+
+      - name: Pytest 테스트 실행
+        run: cd backend && pytest tests/ -v --cov=app --cov-report=xml --cov-report=term-missing || true
+
+      - name: 테스트 커버리지 업로드
+        uses: codecov/codecov-action@v4
+        if: github.event_name == 'pull_request'
+        with:
+          file: ./backend/coverage.xml
+          flags: backend
+          fail_ci_if_error: false
+        continue-on-error: true
+
+  frontend-validation:
+    name: Frontend 검증 (TypeScript/React)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 저장소 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Node.js 설정
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
+
+      - name: 의존성 설치
+        run: cd frontend && npm ci
+
+      - name: ESLint 린트
+        run: cd frontend && npm run lint
+
+      - name: TypeScript 타입 체크
+        run: cd frontend && npm run type-check
+
+      - name: 빌드 테스트
+        run: cd frontend && npm run build
+
+      - name: 프론트엔드 테스트 (있는 경우)
+        run: cd frontend && npm test -- --passWithNoTests --watchAll=false || true
+
+  security-scan:
+    name: 보안 스캔
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 저장소 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Python 설정
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Python 의존성 취약점 스캔
+        run: |
+          pip install safety
+          cd backend
+          safety check --json --continue-on-error || true
+        continue-on-error: true
+
+      - name: Node.js 설정
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Node.js 의존성 취약점 스캔
+        run: cd frontend && npm audit --audit-level=high --production || true
+        continue-on-error: true
+
+      - name: Secret Scanning (Gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true

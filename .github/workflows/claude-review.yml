@@ -1,0 +1,225 @@
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+jobs:
+  claude-review:
+    name: Claude 자동 코드 리뷰
+    # Draft PR은 제외
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: 저장소 체크아웃
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: PR 정보 가져오기
+        id: pr-info
+        run: |
+          echo "pr_number=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+          echo "pr_title=${{ github.event.pull_request.title }}" >> $GITHUB_OUTPUT
+          echo "base_ref=${{ github.event.pull_request.base.ref }}" >> $GITHUB_OUTPUT
+          echo "head_ref=${{ github.event.pull_request.head.ref }}" >> $GITHUB_OUTPUT
+          echo "pr_author=${{ github.event.pull_request.user.login }}" >> $GITHUB_OUTPUT
+
+      - name: PR 변경 파일 목록
+        id: changed-files
+        run: |
+          git fetch origin ${{ steps.pr-info.outputs.base_ref }}
+          FILES=$(git diff --name-only origin/${{ steps.pr-info.outputs.base_ref }}...HEAD)
+          echo "Changed files:"
+          echo "$FILES"
+          echo "files<<EOF" >> $GITHUB_OUTPUT
+          echo "$FILES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: PR diff 생성 (크기 제한)
+        id: diff
+        run: |
+          git diff origin/${{ steps.pr-info.outputs.base_ref }}...HEAD > pr_diff.txt
+          DIFF_SIZE=$(wc -l < pr_diff.txt)
+          echo "diff_size=$DIFF_SIZE" >> $GITHUB_OUTPUT
+
+          # Diff가 너무 크면 요약만 생성
+          if [ $DIFF_SIZE -gt 5000 ]; then
+            echo "⚠️ Diff가 너무 큽니다 ($DIFF_SIZE 라인). 주요 파일만 리뷰합니다."
+            git diff --stat origin/${{ steps.pr-info.outputs.base_ref }}...HEAD > pr_diff_summary.txt
+          fi
+
+      - name: Claude API를 사용한 코드 리뷰
+        id: claude-review
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Python으로 Claude API 호출 스크립트 작성
+          cat > claude_review.py << 'PYTHON_SCRIPT'
+          import os
+          import json
+          import anthropic
+          from pathlib import Path
+
+          client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+
+          # PR 정보 읽기
+          pr_number = "${{ steps.pr-info.outputs.pr_number }}"
+          pr_title = "${{ steps.pr-info.outputs.pr_title }}"
+          pr_author = "${{ steps.pr-info.outputs.pr_author }}"
+          diff_size = ${{ steps.diff.outputs.diff_size }}
+
+          # Diff 읽기
+          try:
+              with open("pr_diff.txt", "r", encoding="utf-8") as f:
+                  pr_diff = f.read()
+
+              # Diff가 너무 크면 첫 5000줄만
+              if diff_size > 5000:
+                  pr_diff = "\n".join(pr_diff.split("\n")[:5000])
+                  pr_diff += f"\n\n... (총 {diff_size}줄 중 5000줄만 표시)"
+          except Exception as e:
+              pr_diff = f"Diff를 읽을 수 없습니다: {e}"
+
+          # 변경 파일 목록
+          changed_files = """${{ steps.changed-files.outputs.files }}"""
+
+          # PR Reviewer Agent 프롬프트 읽기
+          try:
+              with open(".claude/agents/pr-reviewer.md", "r", encoding="utf-8") as f:
+                  agent_prompt = f.read()
+          except:
+              agent_prompt = "당신은 코드 리뷰 전문가입니다."
+
+          # Claude API 호출
+          message = client.messages.create(
+              model="claude-sonnet-4-5-20250929",
+              max_tokens=8000,
+              temperature=0.3,
+              system=f"{agent_prompt}\n\n프로젝트 루트: postgresql-optimizer-dashboard",
+              messages=[
+                  {
+                      "role": "user",
+                      "content": f"""다음 Pull Request를 리뷰해주세요:
+
+          **PR 정보:**
+          - 번호: #{pr_number}
+          - 제목: {pr_title}
+          - 작성자: @{pr_author}
+          - 변경 라인 수: {diff_size}
+
+          **변경된 파일 목록:**
+          ```
+          {changed_files}
+          ```
+
+          **변경사항 (Diff):**
+          ```diff
+          {pr_diff}
+          ```
+
+          ---
+
+          위 내용을 바탕으로 다음 우선순위로 리뷰해주세요:
+
+          1. 🔴 **보안 취약점** (Critical) - 최우선
+             - SQL Injection, XSS, 인증/인가 우회
+             - 민감 정보 노출, CSRF, 안전하지 않은 직렬화
+
+          2. 🟡 **코드 품질** (High)
+             - SOLID 원칙 위반
+             - Clean Architecture 경계 위반
+             - 중복 코드, 복잡도, 네이밍
+
+          3. 🟢 **성능 문제** (Medium)
+             - N+1 query, 비효율적 알고리즘
+             - 불필요한 렌더링, 메모리 누수
+
+          4. ℹ️ **테스트** (Low)
+             - 테스트 누락, Edge case
+
+          리뷰 형식을 준수하고 한국어로 작성해주세요.
+          건설적이고 구체적인 피드백을 제공하되, 사소한 스타일 문제는 제외하세요.
+          """
+                  }
+              ]
+          )
+
+          # 리뷰 결과 저장
+          review_content = message.content[0].text
+
+          # GitHub에 코멘트 작성
+          with open("review_output.md", "w", encoding="utf-8") as f:
+              f.write(review_content)
+
+          print("✅ Claude 리뷰 완료")
+          print(f"리뷰 길이: {len(review_content)} 문자")
+          PYTHON_SCRIPT
+
+          # Python 스크립트 실행
+          pip install anthropic requests
+          python claude_review.py
+
+      - name: PR에 리뷰 코멘트 게시
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const reviewContent = fs.readFileSync('review_output.md', 'utf8');
+
+            // PR에 코멘트 추가
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: ${{ steps.pr-info.outputs.pr_number }},
+              body: `## 🤖 Claude 자동 코드 리뷰
+
+          ${reviewContent}
+
+          ---
+
+          **ℹ️ 참고사항:**
+          - 이 리뷰는 Advisory 모드로, PR 병합을 차단하지 않습니다.
+          - Critical 이슈가 발견된 경우에도 최종 판단은 사람 리뷰어가 합니다.
+          - 리뷰 피드백에 대한 질문은 팀원에게 문의하세요.
+
+          **리뷰 우선순위:** 🔴 보안 > 🟡 품질 > 🟢 성능 > ℹ️ 테스트
+          `
+            });
+
+      - name: 리뷰 실패 시 안내
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: ${{ steps.pr-info.outputs.pr_number }},
+              body: `## ⚠️ Claude 코드 리뷰 실패
+
+          자동 코드 리뷰를 실행하는 중 오류가 발생했습니다.
+
+          **가능한 원인:**
+          - Anthropic API 키가 설정되지 않았거나 유효하지 않음
+          - API 요청 한도 초과
+          - 네트워크 오류
+
+          **해결 방법:**
+          1. Repository Settings → Secrets → ANTHROPIC_API_KEY 확인
+          2. [Anthropic Console](https://console.anthropic.com)에서 API 키 상태 확인
+          3. 잠시 후 다시 시도
+
+          사람 리뷰어가 수동으로 리뷰를 진행해주세요.
+          `
+            });
