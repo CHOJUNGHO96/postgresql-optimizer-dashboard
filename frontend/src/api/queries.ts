@@ -9,6 +9,8 @@ import type {
 import type {
   OptimizeQueryRequest,
   OptimizedQueryResponse,
+  CreateTaskRequest,
+  TaskResponse,
 } from '@/types/optimization';
 
 /**
@@ -20,6 +22,8 @@ const ENDPOINTS = {
   GET_PLAN: (id: string) => `/query-analysis/${id}`,
   LIST_PLANS: '/query-analysis/',
   OPTIMIZE_QUERY: (planId: string) => `/query-analysis/${planId}/optimize`,
+  OPTIMIZE_QUERY_ASYNC: (planId: string) => `/query-analysis/${planId}/optimize/async`,
+  GET_TASK_STATUS: (taskId: string) => `/query-analysis/tasks/${taskId}`,
   GET_OPTIMIZATIONS: (planId: string) => `/query-analysis/${planId}/optimize`,
   GET_OPTIMIZATION: (planId: string, optimizationId: string) =>
     `/query-analysis/${planId}/optimize/${optimizationId}`,
@@ -106,6 +110,30 @@ export async function getOptimization(
 ): Promise<OptimizedQueryResponse> {
   const response = await apiClient.get<OptimizedQueryResponse>(
     ENDPOINTS.GET_OPTIMIZATION(planId, optimizationId)
+  );
+  return response.data;
+}
+
+/**
+ * Create async optimization task (non-blocking)
+ */
+export async function optimizeQueryAsync(
+  planId: string,
+  request: CreateTaskRequest
+): Promise<TaskResponse> {
+  const response = await apiClient.post<TaskResponse>(
+    ENDPOINTS.OPTIMIZE_QUERY_ASYNC(planId),
+    request
+  );
+  return response.data;
+}
+
+/**
+ * Get task status
+ */
+export async function getTaskStatus(taskId: string): Promise<TaskResponse> {
+  const response = await apiClient.get<TaskResponse>(
+    ENDPOINTS.GET_TASK_STATUS(taskId)
   );
   return response.data;
 }

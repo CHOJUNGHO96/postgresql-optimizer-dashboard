@@ -69,3 +69,34 @@ export const AI_MODEL_OPTIONS: AIModelOption[] = [
     provider: 'Google',
   },
 ];
+
+/**
+ * Background task status types
+ */
+export type TaskStatus = 'pending' | 'processing' | 'completed' | 'failed';
+
+/**
+ * Request to create async optimization task
+ */
+export interface CreateTaskRequest {
+  ai_model: AIModel;
+  validate_optimization?: boolean;
+  include_schema_context?: boolean;
+}
+
+/**
+ * Background task response
+ */
+export interface TaskResponse {
+  id: string;
+  plan_id: string;
+  ai_model: string;
+  status: TaskStatus;
+  optimization_id: string | null;
+  error_message: string | null;
+  error_type: string | null;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  estimated_duration_seconds: number | null;
+}

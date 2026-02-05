@@ -1,6 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { optimizeQuery, listOptimizations, getOptimization } from '@/api/queries';
-import type { OptimizeQueryRequest } from '@/types/optimization';
+import {
+  optimizeQuery,
+  optimizeQueryAsync,
+  getTaskStatus,
+  listOptimizations,
+  getOptimization,
+} from '@/api/queries';
+import type { OptimizeQueryRequest, CreateTaskRequest } from '@/types/optimization';
 
 /**
  * Hook for optimizing a query using AI
@@ -38,5 +44,43 @@ export function useOptimization(planId: string, optimizationId: string) {
     queryKey: ['optimization', planId, optimizationId],
     queryFn: () => getOptimization(planId, optimizationId),
     enabled: !!planId && !!optimizationId,
+  });
+}
+
+/**
+ * Hook for async query optimization with background task
+ */
+export function useOptimizeQueryAsync(planId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (request: CreateTaskRequest) => optimizeQueryAsync(planId, request),
+    onSuccess: () => {
+      // Task invalidation happens after task completes
+    },
+  });
+}
+
+/**
+ * Hook for polling task status
+ */
+export function useTaskStatus(taskId: string | null, enabled: boolean = true) {
+  const queryClient = useQueryClient();
+
+  return useQuery({
+    queryKey: ['task-status', taskId],
+    queryFn: () => getTaskStatus(taskId!),
+    enabled: enabled && !!taskId,
+    refetchInterval: (data) => {
+      // Poll every 2 seconds while task is pending/processing
+      if (data?.status === 'pending' || data?.status === 'processing') {
+        return 2000;
+      }
+      // Stop polling when completed/failed
+      return false;
+    },
+    refetchIntervalInBackground: true,
+    retry: 3,
+    retryDelay: 1000,
   });
 }
