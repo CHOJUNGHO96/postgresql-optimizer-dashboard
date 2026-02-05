@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Sparkles, Loader2, X } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Button } from '@/components/common';
-import { useOptimizeQuery } from '@/hooks/useQueryOptimization';
+import { useOptimizeQueryAsync, useTaskStatus, useOptimizations } from '@/hooks/useQueryOptimization';
 import { ModelSelector } from './ModelSelector';
 import type { AIModel, OptimizedQueryResponse } from '@/types/optimization';
 
@@ -16,8 +16,12 @@ export function OptimizeButton({ planId, onOptimizationComplete }: OptimizeButto
   const [selectedModel, setSelectedModel] = useState<AIModel>('claude-3-5-sonnet-20241022');
   const [validateOptimization, setValidateOptimization] = useState(false);
   const [includeSchemaContext, setIncludeSchemaContext] = useState(false);
+  const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
+  const [isPolling, setIsPolling] = useState(false);
 
-  const { mutate: optimize, isPending } = useOptimizeQuery(planId);
+  const { mutate: optimize, isPending } = useOptimizeQueryAsync(planId);
+  const { data: taskStatus } = useTaskStatus(currentTaskId, isPolling);
+  const { refetch: refetchOptimizations } = useOptimizations(planId);
 
   const handleOptimize = () => {
     optimize(
@@ -27,12 +31,16 @@ export function OptimizeButton({ planId, onOptimizationComplete }: OptimizeButto
         include_schema_context: includeSchemaContext,
       },
       {
-        onSuccess: (data) => {
-          toast.success(
-            `쿼리가 성공적으로 최적화되었습니다\nAI 신뢰도: ${(data.confidence_score * 100).toFixed(0)}%`
-          );
+        onSuccess: (taskResponse) => {
+          // Immediately show success toast
+          toast.success('최적화 작업이 시작되었습니다. 백그라운드에서 처리 중입니다.');
+
+          // Close modal immediately
           setOpen(false);
-          onOptimizationComplete?.(data);
+
+          // Start polling task status
+          setCurrentTaskId(taskResponse.id);
+          setIsPolling(true);
         },
         onError: (error: Error) => {
           toast.error(`최적화 실패: ${error.message}`);
@@ -40,6 +48,29 @@ export function OptimizeButton({ planId, onOptimizationComplete }: OptimizeButto
       }
     );
   };
+
+  // Handle task completion
+  useEffect(() => {
+    if (taskStatus) {
+      if (taskStatus.status === 'completed') {
+        setIsPolling(false);
+        setCurrentTaskId(null);
+
+        // Show completion toast
+        toast.success('AI 쿼리 최적화가 완료되었습니다!');
+
+        // Refresh optimizations list
+        refetchOptimizations();
+      } else if (taskStatus.status === 'failed') {
+        setIsPolling(false);
+        setCurrentTaskId(null);
+
+        toast.error(
+          `최적화 실패: ${taskStatus.error_message || '알 수 없는 오류가 발생했습니다.'}`
+        );
+      }
+    }
+  }, [taskStatus, refetchOptimizations]);
 
   return (
     <>
